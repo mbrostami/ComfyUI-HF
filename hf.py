@@ -17,7 +17,7 @@ class GPT2Node:
             "required": {
                 "clip": ("CLIP",),
                 "text": ("STRING", {"multiline": True}),
-                "hg_gpt2_identifier": ("STRING", {
+                "hf_gpt2_repo": ("STRING", {
                     "default": "Gustavosta/MagicPrompt-Stable-Diffusion",
                     "multiline": False
                 }),
@@ -25,7 +25,7 @@ class GPT2Node:
                     "default": 1.0,
                     "min": 0.1,
                     "max": 2.0,
-                    "step": 0.01,
+                    "step": 0.1,
                     "display": "number"
                 }),
             },
@@ -36,7 +36,7 @@ class GPT2Node:
     FUNCTION = "generate"
     CATEGORY = "conditioning"
 
-    def generate(self, clip, text, hg_gpt2_identifier, temperature):
+    def generate(self, clip, text, hf_gpt2_repo, temperature):
         """
         Generates text based on the provided prompt using a specified GPT-2 model.
 
@@ -44,7 +44,7 @@ class GPT2Node:
         ----------
         text : str
             The text prompt to generate text from.
-        hg_gpt2_identifier : str
+        hf_gpt2_repo : str
             The Hugging Face model identifier for the GPT-2 model to use.
         temperature : float
             The temperature to use for generating text, controlling randomness.
@@ -56,9 +56,9 @@ class GPT2Node:
         """
         num_return_sequences = 1
         max_length = 100 # max: 512
-        # Load the model and tokenizer based on the hg_gpt2_identifier
-        tokenizer = GPT2Tokenizer.from_pretrained(hg_gpt2_identifier)
-        model = GPT2LMHeadModel.from_pretrained(hg_gpt2_identifier)
+        # Load the model and tokenizer based on the hf_gpt2_repo
+        tokenizer = GPT2Tokenizer.from_pretrained(hf_gpt2_repo)
+        model = GPT2LMHeadModel.from_pretrained(hf_gpt2_repo)
         model.eval()  # Recommended for inference
 
         input_ids = tokenizer.encode(text, return_tensors='pt')
@@ -70,6 +70,7 @@ class GPT2Node:
             max_length=max_length,
             num_return_sequences=num_return_sequences,
             temperature=temperature,
+            use_cache=True,
             no_repeat_ngram_size=2
         )
 
