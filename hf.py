@@ -1,6 +1,13 @@
-from transformers import GPT2LMHeadModel, GPT2Tokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer
+import re
 
 class GPT2Node:
+    def __init__(self):
+        self.models = {}
+        self.tokenizer = None
+        self.rephrasers = ["microsoft/Promptist"]
+        pass
+
     """
     A node for generating text using GPT-2, with the ability to specify the model via Hugging Face model identifier.
 
@@ -17,7 +24,7 @@ class GPT2Node:
             "required": {
                 "clip": ("CLIP",),
                 "text": ("STRING", {"multiline": True}),
-                "hf_gpt2_repo": ("STRING", {
+                "model_repo": ("STRING", {
                     "default": "Gustavosta/MagicPrompt-Stable-Diffusion",
                     "multiline": False
                 }),
@@ -36,7 +43,7 @@ class GPT2Node:
     FUNCTION = "generate"
     CATEGORY = "conditioning"
 
-    def generate(self, clip, text, hf_gpt2_repo, temperature):
+    def generate(self, clip, text, model_repo, temperature):
         """
         Generates text based on the provided prompt using a specified GPT-2 model.
 
@@ -44,7 +51,7 @@ class GPT2Node:
         ----------
         text : str
             The text prompt to generate text from.
-        hf_gpt2_repo : str
+        model_repo : str
             The Hugging Face model identifier for the GPT-2 model to use.
         temperature : float
             The temperature to use for generating text, controlling randomness.
@@ -54,32 +61,49 @@ class GPT2Node:
         tuple
             A tuple containing the generated text.
         """
+        if self.tokenizer == None:
+            self.tokenizer = AutoTokenizer.from_pretrained('gpt2')
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+            self.tokenizer.padding_side = "left"
         num_return_sequences = 1
         max_length = 100 # max: 512
-        # Load the model and tokenizer based on the hf_gpt2_repo
-        tokenizer = GPT2Tokenizer.from_pretrained(hf_gpt2_repo)
-        model = GPT2LMHeadModel.from_pretrained(hf_gpt2_repo)
-        model.eval()  # Recommended for inference
 
-        input_ids = tokenizer.encode(text, return_tensors='pt')
-        max_length = min(max_length + len(input_ids[0]), 1024)  # Adjusting max_length to account for prompt length
+        # Load the model based on the model_repo
+        if model_repo not in self.models:
+            self.models[model_repo] = AutoModelForCausalLM.from_pretrained(model_repo)
+            self.models[model_repo].eval() # for inference
+
+        text = text.strip()
+        if model_repo in self.rephrasers: 
+            text = text+" Rephrase:"
+        input_ids = self.tokenizer(text, return_tensors='pt').input_ids
+        eos_id = self.tokenizer.eos_token_id
+
+        max_length = min(max_length + len(input_ids), 1024)  # Adjusting max_length to account for prompt length
 
         # Generate text
-        outputs = model.generate(
+        outputs = self.models[model_repo].generate(
             input_ids,
             max_length=max_length,
             num_return_sequences=num_return_sequences,
             temperature=temperature,
             use_cache=True,
-            no_repeat_ngram_size=2
+            do_sample=False,
+            no_repeat_ngram_size=2,
+            eos_token_id=eos_id, 
+            pad_token_id=eos_id, 
+            length_penalty=-1.0,
         )
 
-        new_prompts = tuple(tokenizer.decode(output, skip_special_tokens=True) for output in outputs)
+        output_texts = self.tokenizer.batch_decode(outputs, skip_special_tokens=True)
+        if model_repo in self.rephrasers: 
+            new_prompt = re.sub(r'^.*? Rephrase:', '', output_texts[0]).strip()
+        else: 
+            new_prompt = output_texts[0].strip()
 
-        # Process each prompt individually
-        tokens = clip.tokenize(new_prompts[0])  # Tokenize the individual prompt
+        tokens = clip.tokenize(new_prompt)  # Tokenize the prompt
         cond, pooled = clip.encode_from_tokens(tokens, return_pooled=True)  # Encode the tokens
-        return ([[cond, {"pooled_output": pooled}]], new_prompts[0],)
+        return ([[cond, {"pooled_output": pooled}]], new_prompt,)
 
 
 # Update the NODE_CLASS_MAPPINGS and NODE_DISPLAY_NAME_MAPPINGS to include the GPT2Node
