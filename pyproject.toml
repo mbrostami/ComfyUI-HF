@@ -1,0 +1,15 @@
+[project]
+name = "comfyui-hf"
+description = "ComfyUI Node to work with Hugging Face repositories"
+version = "1.0.0"
+license = "LICENSE"
+dependencies = ["transformers==4.26.1"]
+
+[project.urls]
+Repository = "https://github.com/mbrostami/ComfyUI-HF"
+#  Used by Comfy Registry https://comfyregistry.org
+
+[tool.comfy]
+PublisherId = ""
+DisplayName = "ComfyUI-HF"
+Icon = ""
